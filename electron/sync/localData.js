@@ -1,22 +1,21 @@
 import { getDb, runTransaction } from '../database/index.js';
 
-export function importSetupBusinessData(businessId, data) {
+export function importSetupBusinessData(data) {
   runTransaction(() => {
     const db = getDb();
 
     for (const user of data.users || []) {
       db.prepare(`
         INSERT OR REPLACE INTO users (
-          id, name, email, phone, business_id, branch_id, password_hash, permissions_json, status, date_updated
+          id, name, email, phone, branch_id, password_hash, permissions_json, status, date_updated
         ) VALUES (
-          @id, @name, @email, @phone, @business_id, @branch_id, @password_hash, @permissions_json, @status, @date_updated
+          @id, @name, @email, @phone, @branch_id, @password_hash, @permissions_json, @status, @date_updated
         )
       `).run({
         id: user.id,
         name: user.name,
         email: user.email,
         phone: user.phone || null,
-        business_id: user.business_id || businessId,
         branch_id: user.branch_id || null,
         password_hash: user.password_hash,
         permissions_json: JSON.stringify(user.permissions || {}),
@@ -54,12 +53,18 @@ export function importSetupBusinessData(businessId, data) {
     for (const reg of data.registers || []) {
       db.prepare(`
         INSERT OR REPLACE INTO registers (
-          pos_register_id, business_id, branch_id, warehouse_id, name, code, mode, status, payload_json
+          pos_register_id, branch_id, warehouse_id, name, code, mode, status, payload_json
         ) VALUES (
-          @pos_register_id, @business_id, @branch_id, @warehouse_id, @name, @code, @mode, @status, @payload_json
+          @pos_register_id, @branch_id, @warehouse_id, @name, @code, @mode, @status, @payload_json
         )
       `).run({
-        ...reg,
+        pos_register_id: reg.pos_register_id,
+        branch_id: reg.branch_id || null,
+        warehouse_id: reg.warehouse_id || null,
+        name: reg.name,
+        code: reg.code || null,
+        mode: reg.mode || null,
+        status: reg.status || null,
         payload_json: JSON.stringify(reg),
       });
     }
@@ -77,7 +82,7 @@ export function getLocalLocationOptions() {
   `).all().map((row) => JSON.parse(row.payload_json));
 
   const registers = db.prepare(`
-    SELECT pos_register_id, business_id, branch_id, warehouse_id, name, code, mode, status
+    SELECT pos_register_id, branch_id, warehouse_id, name, code, mode, status
     FROM registers
     ORDER BY name
   `).all();
@@ -120,9 +125,9 @@ export function setCurrentUserId(userId) {
   `).run(String(userId));
 }
 
-export function getLocalUserCount(businessId) {
+export function getLocalUserCount() {
   const row = getDb().prepare(`
-    SELECT COUNT(*) as c FROM users WHERE business_id = ? AND status = 'active'
-  `).get(businessId);
+    SELECT COUNT(*) as c FROM users WHERE status = 'active'
+  `).get();
   return row?.c || 0;
 }

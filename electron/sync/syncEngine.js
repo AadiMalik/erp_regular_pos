@@ -79,8 +79,6 @@ function upsertReference(entity, rows, idKey = null) {
 
 function importBootstrapData(data) {
   const db = getDb();
-  const config = db.prepare('SELECT business_id FROM device_config WHERE id = 1').get();
-  const businessId = data.business_id || config?.business_id;
 
   runTransaction(() => {
     const settings = data.settings || {};
@@ -95,22 +93,30 @@ function importBootstrapData(data) {
 
     for (const reg of data.registers || []) {
       db.prepare(`
-        INSERT OR REPLACE INTO registers (pos_register_id, business_id, branch_id, warehouse_id, name, code, mode, status, payload_json)
-        VALUES (@pos_register_id, @business_id, @branch_id, @warehouse_id, @name, @code, @mode, @status, @payload_json)
-      `).run({ ...reg, payload_json: JSON.stringify(reg) });
+        INSERT OR REPLACE INTO registers (pos_register_id, branch_id, warehouse_id, name, code, mode, status, payload_json)
+        VALUES (@pos_register_id, @branch_id, @warehouse_id, @name, @code, @mode, @status, @payload_json)
+      `).run({
+        pos_register_id: reg.pos_register_id,
+        branch_id: reg.branch_id || null,
+        warehouse_id: reg.warehouse_id || null,
+        name: reg.name,
+        code: reg.code || null,
+        mode: reg.mode || null,
+        status: reg.status || null,
+        payload_json: JSON.stringify(reg),
+      });
     }
 
     for (const user of data.users || []) {
       const existing = db.prepare('SELECT permissions_json FROM users WHERE id = ?').get(user.id);
       db.prepare(`
-        INSERT OR REPLACE INTO users (id, name, email, phone, business_id, branch_id, password_hash, permissions_json, status, date_updated)
-        VALUES (@id, @name, @email, @phone, @business_id, @branch_id, @password_hash, @permissions_json, @status, @date_updated)
+        INSERT OR REPLACE INTO users (id, name, email, phone, branch_id, password_hash, permissions_json, status, date_updated)
+        VALUES (@id, @name, @email, @phone, @branch_id, @password_hash, @permissions_json, @status, @date_updated)
       `).run({
         id: user.id,
         name: user.name,
         email: user.email,
         phone: user.phone || null,
-        business_id: user.business_id || businessId,
         branch_id: user.branch_id || null,
         password_hash: user.password_hash,
         permissions_json: existing?.permissions_json || JSON.stringify(user.permissions || {}),
@@ -121,19 +127,31 @@ function importBootstrapData(data) {
 
     for (const p of data.products || []) {
       db.prepare(`
-        INSERT OR REPLACE INTO products (product_id, business_id, category_id, name, payload_json, date_updated)
-        VALUES (@product_id, @business_id, @category_id, @name, @payload_json, @date_updated)
-      `).run({ ...p, payload_json: JSON.stringify(p) });
+        INSERT OR REPLACE INTO products (product_id, category_id, name, payload_json, date_updated)
+        VALUES (@product_id, @category_id, @name, @payload_json, @date_updated)
+      `).run({
+        product_id: p.product_id,
+        category_id: p.category_id || null,
+        name: p.name,
+        payload_json: JSON.stringify(p),
+        date_updated: p.date_updated || null,
+      });
     }
 
     for (const v of data.variations || []) {
       db.prepare(`
-        INSERT OR REPLACE INTO product_variations (product_variation_id, product_id, business_id, sku, barcode, name, sale_price, is_track_stock, payload_json, date_updated)
-        VALUES (@product_variation_id, @product_id, @business_id, @sku, @barcode, @name, @sale_price, @is_track_stock, @payload_json, @date_updated)
+        INSERT OR REPLACE INTO product_variations (product_variation_id, product_id, sku, barcode, name, sale_price, is_track_stock, payload_json, date_updated)
+        VALUES (@product_variation_id, @product_id, @sku, @barcode, @name, @sale_price, @is_track_stock, @payload_json, @date_updated)
       `).run({
-        ...v,
+        product_variation_id: v.product_variation_id,
+        product_id: v.product_id,
+        sku: v.sku || null,
+        barcode: v.barcode || null,
+        name: v.name,
+        sale_price: v.sale_price,
         is_track_stock: v.is_track_stock ? 1 : 0,
         payload_json: JSON.stringify(v),
+        date_updated: v.date_updated || null,
       });
     }
 

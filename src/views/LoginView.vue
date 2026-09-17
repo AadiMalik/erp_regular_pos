@@ -2,9 +2,6 @@
   <div class="login-page">
     <div class="card">
       <h2>Cashier Login</h2>
-      <p v-if="businessName" class="muted">
-        Business: <strong>{{ businessName }}</strong>
-      </p>
       <p class="muted">Login uses staff accounts saved locally on this device.</p>
 
       <label>Email</label>
@@ -33,14 +30,12 @@ import { invoke } from '@/services/ipc';
 const router = useRouter();
 const email = ref('');
 const password = ref('');
-const businessName = ref('');
 const databasePath = ref('');
 const loading = ref(false);
 const error = ref('');
 
 onMounted(async () => {
   const state = await invoke('app:get-state');
-  businessName.value = state.config?.business_name || '';
   databasePath.value = state.database_path || '';
   if (!state.config?.initialized_at) {
     router.replace('/setup');

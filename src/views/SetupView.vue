@@ -2,26 +2,22 @@
   <div class="setup-page">
     <div class="card">
       <div class="steps">
-        <span :class="{ active: step === 'connection' }">1. Business</span>
+        <span :class="{ active: step === 'connection' }">1. Connect</span>
         <span :class="{ active: step === 'login' }">2. Login</span>
         <span :class="{ active: step === 'location' }">3. Location</span>
         <span :class="{ active: step === 'syncing' }">4. Sync</span>
       </div>
 
-      <!-- Step 1: ERP URL + Business ID (locked forever) -->
+      <!-- Step 1: ERP URL -->
       <div v-if="step === 'connection'">
         <h2>Connect to ERP</h2>
-        <p class="muted">Enter your ERP URL and Business ID. The Business ID is locked to this PC after setup.</p>
+        <p class="muted">Enter your ERP API base URL to download staff accounts and location data.</p>
 
         <label>ERP API Base URL</label>
-        <input v-model="apiUrl" placeholder="https://your-erp.example.com" :disabled="businessLocked" />
+        <input v-model="apiUrl" placeholder="https://your-erp.example.com" />
 
-        <label>Business ID</label>
-        <input v-model="businessId" placeholder="Business UUID from ERP" :disabled="businessLocked" />
-        <p v-if="businessName" class="hint">Business: <strong>{{ businessName }}</strong></p>
-
-        <button class="primary" @click="saveConnection" :disabled="loading || !apiUrl || !businessId">
-          Download Business Data
+        <button class="primary" @click="saveConnection" :disabled="loading || !apiUrl">
+          Connect & Download Data
         </button>
         <p v-if="userCount" class="hint">{{ userCount }} POS staff account(s) saved locally.</p>
       </div>
@@ -30,8 +26,8 @@
       <div v-else-if="step === 'login'">
         <h2>Staff Login</h2>
         <p class="muted">
-          Login locally with a POS staff account downloaded for
-          <strong>{{ businessName || businessId }}</strong>.
+          Login locally with a POS staff account downloaded from
+          <strong>{{ apiUrl }}</strong>.
         </p>
 
         <label>Email</label>
@@ -95,9 +91,6 @@ const router = useRouter();
 
 const step = ref('connection');
 const apiUrl = ref('http://localhost/erp');
-const businessId = ref('');
-const businessName = ref('');
-const businessLocked = ref(false);
 const email = ref('');
 const password = ref('');
 const deviceName = ref('Desktop POS');
@@ -123,9 +116,6 @@ async function loadState() {
   userCount.value = dbInfo.user_count || 0;
   step.value = state.step || 'connection';
   if (state.config?.api_base_url) apiUrl.value = state.config.api_base_url;
-  if (state.config?.business_id) businessId.value = state.config.business_id;
-  if (state.config?.business_name) businessName.value = state.config.business_name;
-  businessLocked.value = !!state.config?.business_id_locked;
   if (state.initialized) {
     router.replace('/pos');
     return;
@@ -142,14 +132,11 @@ async function saveConnection() {
   try {
     const res = await invoke('setup:save-connection', {
       apiBaseUrl: apiUrl.value,
-      businessId: businessId.value.trim(),
     });
-    businessName.value = res.business?.name || '';
-    businessLocked.value = true;
     userCount.value = res.user_count || 0;
     databasePath.value = res.database_path || databasePath.value;
     step.value = 'login';
-    message.value = `Business data downloaded. ${userCount.value} staff account(s) saved locally.`;
+    message.value = `Setup data downloaded. ${userCount.value} staff account(s) saved locally.`;
   } catch (e) {
     error.value = e.message;
   } finally {

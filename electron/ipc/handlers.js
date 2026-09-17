@@ -23,7 +23,7 @@ export function registerIpcHandlers() {
     sync: getSyncState(),
     database_path: getDbPath(),
     config: db().prepare(`
-      SELECT api_base_url, business_id, business_name, business_id_locked, setup_step,
+      SELECT api_base_url, setup_step,
              branch_id, warehouse_id, pos_device_id, device_name, initialized_at, auth_token
       FROM device_config WHERE id = 1
     `).get(),
@@ -31,10 +31,7 @@ export function registerIpcHandlers() {
 
   ipcHandle('app:get-database-path', () => ({
     path: getDbPath(),
-    user_count: (() => {
-      const config = db().prepare('SELECT business_id FROM device_config WHERE id = 1').get();
-      return config?.business_id ? getLocalUserCount(config.business_id) : 0;
-    })(),
+    user_count: getLocalUserCount(),
   }));
 
   ipcHandle('app:open-database-folder', () => {
@@ -51,35 +48,26 @@ export function registerIpcHandlers() {
     };
   });
 
-  ipcHandle('setup:save-connection', async ({ apiBaseUrl, businessId }) => {
+  ipcHandle('setup:save-connection', async ({ apiBaseUrl }) => {
     const url = apiBaseUrl.replace(/\/$/, '');
-    const config = db().prepare('SELECT * FROM device_config WHERE id = 1').get();
-
-    if (config?.business_id_locked && config.business_id && config.business_id !== businessId) {
-      throw new Error('Business ID is locked for this installation and cannot be changed.');
-    }
 
     await pingServer(url);
-    const res = await bootstrapBusiness(url, businessId);
-    if (!res?.Success) throw new Error(res?.Message || 'Unable to fetch business data');
+    const res = await bootstrapBusiness(url);
+    if (!res?.Success) throw new Error(res?.Message || 'Unable to fetch setup data');
 
     const data = res.Data || {};
-    importSetupBusinessData(businessId, data);
+    importSetupBusinessData(data);
 
     db().prepare(`
-      INSERT INTO device_config (id, api_base_url, business_id, business_name, business_id_locked, setup_step)
-      VALUES (1, ?, ?, ?, 1, 'login')
+      INSERT INTO device_config (id, api_base_url, setup_step)
+      VALUES (1, ?, 'login')
       ON CONFLICT(id) DO UPDATE SET
         api_base_url = excluded.api_base_url,
-        business_id = excluded.business_id,
-        business_name = excluded.business_name,
-        business_id_locked = 1,
         setup_step = 'login'
-    `).run(url, businessId, data.business?.name || data.name || '');
+    `).run(url);
 
     return {
-      business: data.business || { name: data.business?.name },
-      user_count: data.user_count || getLocalUserCount(businessId),
+      user_count: data.user_count || getLocalUserCount(),
       database_path: getDbPath(),
     };
   });
@@ -91,14 +79,11 @@ export function registerIpcHandlers() {
 
   ipcHandle('setup:login', ({ email, password }) => {
     const config = db().prepare('SELECT * FROM device_config WHERE id = 1').get();
-    if (!config?.business_id) throw new Error('Business ID is not configured. Complete step 1 first.');
+    if (!config?.api_base_url) throw new Error('ERP connection is not configured. Complete step 1 first.');
 
     const user = db().prepare('SELECT * FROM users WHERE email = ? AND status = ?').get(email, 'active');
     if (!user) {
-      throw new Error('User not found on this device. Re-validate the business while online to download staff accounts.');
-    }
-    if (user.business_id && user.business_id !== config.business_id) {
-      throw new Error('This user does not belong to the business configured on this device.');
+      throw new Error('User not found on this device. Re-connect while online to download staff accounts.');
     }
 
     const ok = bcrypt.compareSync(password, user.password_hash);
@@ -113,7 +98,6 @@ export function registerIpcHandlers() {
         id: user.id,
         name: user.name,
         email: user.email,
-        business_id: user.business_id,
         branch_id: user.branch_id,
       },
       permissions: JSON.parse(user.permissions_json || '{}'),
@@ -123,21 +107,20 @@ export function registerIpcHandlers() {
   ipcHandle('setup:fetch-locations', () => {
     const locations = getLocalLocationOptions();
     if (!locations.branches.length) {
-      throw new Error('No branches found locally. Go back to step 1 and re-download business data while online.');
+      throw new Error('No branches found locally. Go back to step 1 and re-download setup data while online.');
     }
     return locations;
   });
 
   ipcHandle('setup:complete', async ({ branchId, registerId, deviceName, fingerprint, email, password }) => {
     const config = db().prepare('SELECT * FROM device_config WHERE id = 1').get();
-    if (!config?.business_id) throw new Error('Business is not configured.');
+    if (!config?.api_base_url) throw new Error('ERP connection is not configured.');
     if (!email || !password) throw new Error('Staff login is required before registering this device.');
     if (!branchId) throw new Error('Branch is required.');
 
     const res = await registerDeviceSetup(config.api_base_url, {
       email,
       password,
-      business_id: config.business_id,
       name: deviceName || 'Desktop POS',
       branch_id: branchId,
       pos_register_id: registerId || null,
@@ -169,14 +152,13 @@ export function registerIpcHandlers() {
 
     if (user) {
       db().prepare(`
-        INSERT OR REPLACE INTO users (id, name, email, phone, business_id, branch_id, password_hash, permissions_json, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
+        INSERT OR REPLACE INTO users (id, name, email, phone, branch_id, password_hash, permissions_json, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
       `).run(
         user.id,
         user.name,
         user.email,
         user.phone,
-        config.business_id,
         user.branch_id,
         res.Data.password_hash,
         JSON.stringify(res.Data.permissions || {}),
@@ -194,12 +176,8 @@ export function registerIpcHandlers() {
   });
 
   ipcHandle('auth:login', ({ email, password }) => {
-    const config = db().prepare('SELECT business_id FROM device_config WHERE id = 1').get();
     const user = db().prepare('SELECT * FROM users WHERE email = ? AND status = ?').get(email, 'active');
     if (!user) throw new Error('User not found locally. Connect to internet for first login.');
-    if (config?.business_id && user.business_id && user.business_id !== config.business_id) {
-      throw new Error('This user does not belong to the business configured on this device.');
-    }
     const ok = bcrypt.compareSync(password, user.password_hash);
     if (!ok) throw new Error('Invalid email or password.');
 
@@ -210,7 +188,6 @@ export function registerIpcHandlers() {
         id: user.id,
         name: user.name,
         email: user.email,
-        business_id: user.business_id,
         branch_id: user.branch_id,
       },
       permissions: JSON.parse(user.permissions_json || '{}'),
@@ -276,8 +253,12 @@ export function registerIpcHandlers() {
       registers,
       customers,
       current_user: currentUser,
-      business_id: config?.business_id,
-      business_name: config?.business_name,
+      shop_name: (settings.pos_setting || {}).shop_name
+        || (settings.pos_setting || {}).company_name
+        || (settings.business_setting || {}).company_name
+        || (settings.business_setting || {}).name
+        || branch?.name
+        || '',
       branch_id: config?.branch_id,
       branch_name: branch?.name,
       warehouse_id: config?.warehouse_id,
@@ -287,7 +268,6 @@ export function registerIpcHandlers() {
 
   ipcHandle('customer:add', ({ name, email, phone }) => {
     if (!name || !email) throw new Error('Name and Email are required.');
-    const config = db().prepare('SELECT business_id FROM device_config WHERE id = 1').get();
     const userId = `cust_${uuidv4()}`;
     const payload = { user_id: userId, name, email, phone: phone || null, is_walkin: 0, credit_limit: 0, credit_days: 0, store_credit_balance: 0 };
 
@@ -300,7 +280,7 @@ export function registerIpcHandlers() {
       db().prepare(`
         INSERT INTO sync_queue (local_id, type, idempotency_key, payload_json, status)
         VALUES (?, 'customer.add', ?, ?, 'pending')
-      `).run(userId, `${userId}:add`, JSON.stringify({ ...payload, business_id: config?.business_id }));
+      `).run(userId, `${userId}:add`, JSON.stringify(payload));
     });
 
     return payload;
@@ -338,8 +318,7 @@ export function registerIpcHandlers() {
       ), 0) as available_stock
       FROM product_variations pv
       JOIN products p ON p.product_id = pv.product_id
-      WHERE pv.business_id = (SELECT business_id FROM device_config WHERE id = 1)
-        AND (pv.barcode = ? OR pv.sku = ? OR pv.name LIKE ? OR p.name LIKE ?)
+      WHERE (pv.barcode = ? OR pv.sku = ? OR pv.name LIKE ? OR p.name LIKE ?)
       LIMIT 30
     `).all(...warehouseIds, term, term, like, like);
 
@@ -356,7 +335,7 @@ export function registerIpcHandlers() {
     const placeholders = warehouseIds.map(() => '?').join(',') || 'NULL';
     let sql = `
       SELECT p.* FROM products p
-      WHERE p.business_id = (SELECT business_id FROM device_config WHERE id = 1)
+      WHERE 1 = 1
     `;
     const params = [];
     if (categoryId) {

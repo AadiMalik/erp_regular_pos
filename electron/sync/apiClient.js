@@ -79,15 +79,15 @@ export async function pingServer(apiBaseUrl) {
   return res.data;
 }
 
-export async function validateBusiness(apiBaseUrl, businessId) {
+export async function validateBusiness(apiBaseUrl) {
   const client = createOfflineAxios(apiBaseUrl, { timeout: 15000 });
-  const res = await client.post('/api/offline/setup/validate-business', { business_id: businessId });
+  const res = await client.post('/api/offline/setup/validate-business');
   return res.data;
 }
 
-export async function bootstrapBusiness(apiBaseUrl, businessId) {
+export async function bootstrapBusiness(apiBaseUrl) {
   const client = createOfflineAxios(apiBaseUrl, { timeout: 120000 });
-  const res = await client.post('/api/offline/setup/bootstrap-business', { business_id: businessId });
+  const res = await client.post('/api/offline/setup/bootstrap-business');
   return res.data;
 }
 
@@ -97,24 +97,21 @@ export async function registerDeviceSetup(apiBaseUrl, payload) {
   return res.data;
 }
 
-export async function loginOnline(apiBaseUrl, email, password, businessId) {
+export async function loginOnline(apiBaseUrl, email, password) {
   const client = createOfflineAxios(apiBaseUrl, { timeout: 30000 });
   const res = await client.post('/api/offline/auth/login', {
     email,
     password,
-    business_id: businessId,
   });
   return res.data;
 }
 
-export async function fetchLocationOptions(apiBaseUrl, authToken, businessId) {
+export async function fetchLocationOptions(apiBaseUrl, authToken) {
   const client = createOfflineAxios(apiBaseUrl, {
     timeout: 30000,
     headers: { Authorization: `Bearer ${authToken}` },
   });
-  const res = await client.get('/api/offline/setup/location-options', {
-    params: { business_id: businessId },
-  });
+  const res = await client.get('/api/offline/setup/location-options');
   return res.data;
 }
 

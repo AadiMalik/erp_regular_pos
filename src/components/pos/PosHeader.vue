@@ -5,7 +5,7 @@
         <i class="fa fa-store"></i>
       </span>
       <span class="pos-brand-text">
-        <span class="pos-brand-name" :title="businessName">{{ businessName || 'POS' }}</span>
+        <span class="pos-brand-name" :title="shopName">{{ shopName || 'POS' }}</span>
         <span class="pos-brand-welcome">Welcome, {{ userName }}</span>
       </span>
     </span>
@@ -99,7 +99,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const props = defineProps({
-  businessName: { type: String, default: '' },
+  shopName: { type: String, default: '' },
   userName: { type: String, default: '' },
   branchName: { type: String, default: '' },
   session: { type: Object, default: null },

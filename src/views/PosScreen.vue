@@ -1,7 +1,7 @@
 <template>
   <div class="pos-screen-wrapper" id="posScreen">
     <PosHeader
-      :business-name="bootstrap.business_name"
+      :shop-name="bootstrap.shop_name"
       :user-name="bootstrap.current_user?.name || ''"
       :branch-name="bootstrap.branch_name"
       :session="session"
@@ -816,7 +816,7 @@
       :style="{ maxWidth: (settings.thermal_print_setting?.paper_width_mm || 80) + 'mm' }"
     >
       <div class="tr-center">
-        <p v-if="bootstrap.business_name" class="tr-name">{{ bootstrap.business_name }}</p>
+        <p v-if="bootstrap.shop_name" class="tr-name">{{ bootstrap.shop_name }}</p>
         <p class="tr-meta-line">Register Session Summary</p>
       </div>
       <hr class="tr-divider" />
@@ -941,7 +941,7 @@ const bootstrap = reactive({
   registers: [],
   customers: [],
   current_user: null,
-  business_name: '',
+  shop_name: '',
   branch_name: '',
   warehouse_name: '',
 });

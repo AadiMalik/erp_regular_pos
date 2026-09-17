@@ -15,7 +15,6 @@ export function runMigrations(db) {
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
       phone TEXT,
-      business_id TEXT,
       branch_id TEXT,
       password_hash TEXT NOT NULL,
       permissions_json TEXT,
@@ -26,22 +25,18 @@ export function runMigrations(db) {
     CREATE TABLE IF NOT EXISTS device_config (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       api_base_url TEXT,
-      business_id TEXT,
       branch_id TEXT,
       warehouse_id TEXT,
       pos_device_id TEXT,
       device_token TEXT,
       device_name TEXT,
       auth_token TEXT,
-      business_name TEXT,
-      business_id_locked INTEGER DEFAULT 0,
       setup_step TEXT DEFAULT 'connection',
       initialized_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS registers (
       pos_register_id TEXT PRIMARY KEY,
-      business_id TEXT,
       branch_id TEXT,
       warehouse_id TEXT,
       name TEXT,
@@ -89,7 +84,6 @@ export function runMigrations(db) {
 
     CREATE TABLE IF NOT EXISTS products (
       product_id TEXT PRIMARY KEY,
-      business_id TEXT,
       category_id TEXT,
       name TEXT,
       payload_json TEXT,
@@ -99,7 +93,6 @@ export function runMigrations(db) {
     CREATE TABLE IF NOT EXISTS product_variations (
       product_variation_id TEXT PRIMARY KEY,
       product_id TEXT,
-      business_id TEXT,
       sku TEXT,
       barcode TEXT,
       name TEXT,
